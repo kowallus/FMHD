@@ -7,7 +7,6 @@
 #include <sstream>
 #include <omp.h>
 
-#define FMT_HEADER_ONLY
 #include "fmt/format.h"
 
 /* function return how many bits we need to store number */
@@ -89,7 +88,7 @@ dist_ibf(
             }
         }
         for (const auto &it : outputs) {
-            std::cout << it.str();
+            *appout << it.str();
         }
     } else {
     
@@ -107,7 +106,7 @@ dist_ibf(
         }
 
         for (const auto &it: outputs) {
-            fmt::print(fmt::to_string(it));
+            *appout << fmt::to_string(it);
         }
     }
 }

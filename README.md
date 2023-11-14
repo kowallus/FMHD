@@ -7,8 +7,8 @@ The project was described in the following B.Sc. thesis (in Polish): *Efektywne 
 
 1. Build a project.
 2. Add all filenames or directories with data to compare to a single file, e.g. `data.txt`.
-3. Sketch e.g. `./FMHD sketch -l data.txt -o sketches.bin`.
-4. Compare e.g. `./FMHD ibf -l sketches.bin`
+3. Sketch e.g. `./FMHD -c sketch -l data.txt -o sketches.bin`.
+4. Compare e.g. `./FMHD -c ibf -l sketches.bin`
 
 ### build instructions 
 

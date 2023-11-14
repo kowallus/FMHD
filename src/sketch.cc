@@ -3,63 +3,107 @@
 #include <limits> /* max number which we can put into uint64_t */
 #include "xxhash64.hpp" /* hashing function */
 #include <unordered_map>
+#include <cstring>
+#include <iostream>
+#include "commons.hpp"
 
-inline uint64_t hash(const std::string_view input)
-{
-    return XXHash64::hash(input.data(), input.length(), SEED);
+// based on http://www.amsoftware.narod.ru/algo2.html
+template <size_t K>
+inline std::uint32_t maRushPrime1HashSimplified(const char *str) {
+    std::uint64_t hash = K;
+    std::uint32_t k;
+    for (std::uint32_t j = 0; j < K/4; ) {
+        memcpy(&k, str, 4);
+        k += j++;
+        hash ^= k;
+        hash *= 171717;
+        str += 4;
+    }
+    if (K % 4) {
+        memcpy(&k, str, K % 4);
+        hash ^= K/4;
+        hash *= 171717;
+    }
+    return (std::uint32_t)(hash);
+}
+template <size_t K>
+inline std::uint32_t xxhash64(const char *str) {
+    return XXHash64::hash(str, K, SEED);
 }
 
-std::array<char, 128>
-init_rc_table(void)
-{
-    std::array<char, 128> res = {0};
-    res['A'] = 'T';
-    res['T'] = 'A';
-    res['U'] = 'A';
-    res['C'] = 'G';
-    res['G'] = 'C';
-    res['M'] = 'K';
-    res['K'] = 'M';
-    res['R'] = 'Y';
-    res['Y'] = 'R';
-    res['W'] = 'W';
-    res['S'] = 'S';
-    res['V'] = 'B';
-    res['B'] = 'V';
-    res['H'] = 'D';
-    res['D'] = 'H';
-    res['N'] = 'N';
+template <size_t K, int HASH_ID>
+inline uint64_t hash(char* input);
 
-    return res;
+template <> inline uint64_t hash<20, MA_RUSH_PRIME1_HASH_SIMPLIFIED_ID>(char* input) { return maRushPrime1HashSimplified<20>(input); }
+template <> inline uint64_t hash<21, MA_RUSH_PRIME1_HASH_SIMPLIFIED_ID>(char* input) { return maRushPrime1HashSimplified<21>(input); }
+template <> inline uint64_t hash<24, MA_RUSH_PRIME1_HASH_SIMPLIFIED_ID>(char* input) { return maRushPrime1HashSimplified<24>(input); }
+template <> inline uint64_t hash<20, XXHASH64_ID>(char* input) { return xxhash64<20>(input); }
+template <> inline uint64_t hash<21, XXHASH64_ID>(char* input) { return xxhash64<21>(input); }
+template <> inline uint64_t hash<24, XXHASH64_ID>(char* input) { return xxhash64<24>(input); }
+
+template <size_t K, int HASH_ID>
+inline void processInput(std::string &input, std::array<uint64_t, M> &hashes);
+
+template <size_t K, int HASH_ID>
+inline void processInput(std::string &input, std::array<uint64_t, M> &hashes) {
+    const size_t guard = input.size() - K + 1;
+    for (size_t i = 0; i < guard; ++i) {
+        const uint64_t hashValue = hash<K, HASH_ID>( input.data() + i);
+        uint64_t where = hashValue & MASK;
+        hashes[where] = std::min(hashes[where], hashValue);
+    }
 }
 
-std::string
-get_reversed_complement(
-    const std::string& input,
-    const std::array<char, 128>& rc_lookup)
+template<>
+inline void processInput<4, NONE_HASH_ID>(std::string &input, std::array<uint64_t, M> &hashes)
 {
-    std::string output = std::string(input.size(), 'N');
-    for (int i = 0; i < input.size(); ++i)
-        output[input.size() - i - 1] = rc_lookup[input[i]];
-    return output;
+    const size_t guard = input.size() - 4 + 1;
+    for ( size_t i = 0; i<guard; ++i) {
+        const uint64_t hashValue = *((uint64_t*) (input.data() + i));
+        uint64_t where = hashValue & MASK;
+        hashes[where] = std::min(hashes[where], hashValue);
+    }
 }
-
-std::array<uint64_t, M>
-get_sketch(
-    const std::string input,
-    const size_t k,
-    const std::array<char, 128>& rc_lookup)
+template <size_t K, int HASH_ID>
+inline std::array<uint64_t, M> get_sketch_full_template( std::string input )
 {
     std::array<uint64_t, M> hashes{};
     hashes.fill(std::numeric_limits<uint64_t>::max());
-    const std::string input_rc = get_reversed_complement(input, rc_lookup);
-    const auto size = input.size();
-    for (size_t i = 0, j = size - k; i < size - k + 1; ++i, --j) {
-        const std::string_view kmer(input.data() + i, k);
-        const std::string_view rc_kmer(input_rc.data() + j, k);
-        const uint64_t canonical = hash((kmer <= rc_kmer) ? kmer : rc_kmer);
-        const uint64_t where = canonical & MASK;
-        hashes[where] = std::min(hashes[where], canonical);
-    }
+    processInput<K, HASH_ID>(input, hashes);
+    reverseComplementInPlace(input);
+    processInput<K, HASH_ID>(input, hashes);
     return hashes;
 }
+
+template <int HASH_ID>
+inline std::array<uint64_t, M> get_sketch_hash_template( std::string input, uint8_t kmerlen ) {
+    if (kmerlen == 20) return get_sketch_full_template<20, HASH_ID>(input);
+    if (kmerlen == 21) return get_sketch_full_template<21, HASH_ID>(input);
+    if (kmerlen == 24) return get_sketch_full_template<24, HASH_ID>(input);
+    std::cerr << "unsupported kmer length: " << kmerlen << std::endl;
+    exit(EXIT_FAILURE);
+}
+
+std::array<uint64_t, M> get_sketch( std::string input, const uint8_t kmerlen, const int hash_id ) {
+    if (hash_id == MA_RUSH_PRIME1_HASH_SIMPLIFIED_ID)
+        return get_sketch_hash_template<MA_RUSH_PRIME1_HASH_SIMPLIFIED_ID>(input, kmerlen);
+    if (hash_id ==  XXHASH64_ID)
+        return get_sketch_hash_template<XXHASH64_ID>(input, kmerlen);
+    if (hash_id == NONE_HASH_ID)
+        return get_sketch_full_template<4, NONE_HASH_ID>(input);
+    std::cerr << "unsupported hash type id: " << hash_id << std::endl;
+    exit(EXIT_FAILURE);
+}
+
+template std::array<uint64_t, M> get_sketch_hash_template<MA_RUSH_PRIME1_HASH_SIMPLIFIED_ID>( std::string , uint8_t );
+template std::array<uint64_t, M> get_sketch_hash_template<XXHASH64_ID>( std::string , uint8_t );
+
+template std::array<uint64_t, M> get_sketch_full_template<4, NONE_HASH_ID>( std::string );
+
+template std::array<uint64_t, M> get_sketch_full_template<20, MA_RUSH_PRIME1_HASH_SIMPLIFIED_ID>( std::string );
+template std::array<uint64_t, M> get_sketch_full_template<21, MA_RUSH_PRIME1_HASH_SIMPLIFIED_ID>( std::string );
+template std::array<uint64_t, M> get_sketch_full_template<24, MA_RUSH_PRIME1_HASH_SIMPLIFIED_ID>( std::string );
+
+template std::array<uint64_t, M> get_sketch_full_template<20, XXHASH64_ID>( std::string );
+template std::array<uint64_t, M> get_sketch_full_template<21, XXHASH64_ID>( std::string );
+template std::array<uint64_t, M> get_sketch_full_template<24, XXHASH64_ID>( std::string );

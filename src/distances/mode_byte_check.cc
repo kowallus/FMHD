@@ -6,7 +6,6 @@
 #include <sstream>
 #include <omp.h>
 
-#define FMT_HEADER_ONLY
 #include "fmt/format.h"
 
 typedef uint32_t block_t;

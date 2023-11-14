@@ -2,6 +2,7 @@
 #include <array> /* array type used in sketches, mixers, etc */
 #include <omp.h>
 
+#include "commons.hpp"
 #include "constants.hpp"
 #include "sketch.hpp"
 #include "CLI11.hpp" /* parsing command-line arguments */
@@ -40,23 +41,34 @@ int main (int argc, char **argv) {
     omp_set_dynamic(false);
     omp_set_num_threads(num_of_threads);
 
+    std::chrono::steady_clock::time_point start_t = std::chrono::steady_clock::now();
+
+//    appout = &null_stream;
+
     if (cmd == "sketch") {
         std::string line;
         std::ifstream input_file(files_list);
         std::vector<std::string> files_names;
+        std::vector<std::string> genomes;
 
         while (std::getline(input_file, line)) {
-            files_names.push_back(line);    
+            files_names.push_back(line);
+            genomes.push_back(read_fna(line));
         }
         const size_t len_sketches = files_names.size();
 
+        *devout << "reading in "
+                << time_millis(start_t) << " msec" << std::endl;
+        start_t = std::chrono::steady_clock::now();
+
         std::vector<std::array<uint64_t, M>> sketches(len_sketches);
-        
-        const std::array<char, 128> rc_lookup = init_rc_table();
 
         #pragma omp parallel for
-        for (int i = 0; i < len_sketches; ++i)
-            sketches[i] = get_sketch(read_fna(files_names[i]), kmerlen, rc_lookup);
+        for (int i = 0; i < len_sketches; ++i) {
+            sketches[i] = get_sketch_hash_template<MA_RUSH_PRIME1_HASH_SIMPLIFIED_ID>(genomes[i], kmerlen);
+//            sketches[i] = get_sketch(genomes[i], (uint8_t) kmerlen, MA_RUSH_PRIME1_HASH_SIMPLIFIED_ID); // slower
+//            sketches[i] = get_sketch_full_template<4, NONE_HASH_ID>(genomes[i]); // only for testing, slower than without templates
+        }
 
         save_sketches(sketches, files_names, out_file);
     } else {
@@ -65,5 +77,9 @@ int main (int argc, char **argv) {
         if (read_sketches(sketches, files_names, files_list))
             functionMap.at(cmd)(sketches, files_names, num_of_threads, edgelist);
     }
+
+    *devout << "finished in "
+            << time_millis(start_t) << " msec" << std::endl;
+
     return EXIT_SUCCESS;
 }

@@ -7,7 +7,6 @@
 #include <unordered_map>
 #include <omp.h>
 
-#define FMT_HEADER_ONLY
 #include "fmt/format.h"
 
 typedef uint8_t block_t;

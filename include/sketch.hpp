@@ -12,13 +12,16 @@
 const uint64_t BOTTOM_BITS = log2(M); /* bits used to first hash */
 const uint64_t MASK = M - 1;
 
-std::array<uint64_t, M>
-get_sketch(
-    const std::string input,
-    const size_t k,
-    const std::array<char, 128>& rc_lookup);
+const int NONE_HASH_ID = 0;
+const int MA_RUSH_PRIME1_HASH_SIMPLIFIED_ID = 1;
+const int XXHASH64_ID = 2;
 
+template <size_t K, int HASH_ID>
+std::array<uint64_t, M> get_sketch_full_template( std::string input );
 
-std::array<char, 128> init_rc_table(void);
+template <int HASH_ID>
+std::array<uint64_t, M> get_sketch_hash_template( std::string input, uint8_t kmerlen );
+
+std::array<uint64_t, M> get_sketch( std::string input, const uint8_t kmerlen, const int hash_id );
 
 #endif

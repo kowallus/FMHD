@@ -8,8 +8,6 @@
 #include <algorithm>
 #include <omp.h>
 
-
-#define FMT_HEADER_ONLY
 #include "fmt/format.h"
 
 template <typename T>
