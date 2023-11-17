@@ -44,21 +44,20 @@ inline void processInput(std::string &input, std::array<uint64_t, M> &hashes);
 template <size_t K, int HASH_ID>
 inline void processInputInBlocks(std::string &input, std::array<uint64_t, M> &hashes) {
     const size_t guard = input.size() - K + 1;
-    int MULTI_K = 64;
+    int MULTI_K = 8;
     const size_t multi_guard = (guard / MULTI_K) * MULTI_K;
-    uint64_t multiHashes[MULTI_K];
     size_t i = 0;
     for (; i < multi_guard; i += MULTI_K) {
         bool candidates = false;
         for (int j = 0; j < MULTI_K; j++) {
-            multiHashes[j] = hash<K, HASH_ID>( input.data() + i + j );
-//            if (~(multiHashes[j] & 0xFFC0000000000000))
-            if ((multiHashes[j] >> 54) == 0)
+            if ((hash<K, HASH_ID>( input.data() + i + j ) & 0xFFC0000000000000) == 0) {
                 candidates = true;
+                break;
+            }
         }
         if (candidates)
             for (int j = 0; j < MULTI_K; j++) {
-                const uint64_t hashValue = multiHashes[j];
+                const uint64_t hashValue = hash<K, HASH_ID>( input.data() + i + j );
                 uint64_t where = hashValue & MASK;
                 hashes[where] = std::min(hashes[where], hashValue);
             }
