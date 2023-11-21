@@ -49,17 +49,19 @@ inline void processInputInBlocks(std::string &input, std::array<uint64_t, M> &ha
     size_t i = 0;
     for (; i < multi_guard; i += MULTI_K) {
         bool candidates = false;
-        for (int j = 0; j < MULTI_K; j++) {
+        int j = 0;
+        for (; j < MULTI_K; j++) {
             if ((hash<K, HASH_ID>( input.data() + i + j ) & 0xFFC0000000000000) == 0) {
                 candidates = true;
                 break;
             }
         }
         if (candidates)
-            for (int j = 0; j < MULTI_K; j++) {
+            for (; j < MULTI_K; j++) {
                 const uint64_t hashValue = hash<K, HASH_ID>( input.data() + i + j );
                 uint64_t where = hashValue & MASK;
-                hashes[where] = std::min(hashes[where], hashValue);
+                if (hashValue < hashes[where]) [[unlikely]]
+                   hashes[where] = hashValue;
             }
     }
     for (; i < guard; ++i) {
@@ -71,18 +73,24 @@ inline void processInputInBlocks(std::string &input, std::array<uint64_t, M> &ha
 
 template <size_t K, int HASH_ID>
 inline void processInput(std::string &input, std::array<uint64_t, M> &hashes) {
+    uint64_t hashValue;
     const size_t guard = input.size() - K + 1;
     for (size_t i = 0; i < guard; ++i) {
-        const uint64_t hashValue = hash<K, HASH_ID>(input.data() + i);
-        uint64_t where = hashValue & MASK;
-        hashes[where] = std::min(hashes[where], hashValue);
+        bool candidate = false;
+        if (((hashValue = hash<K, HASH_ID>(input.data() + i)) & 0xFFC0000000000000) == 0) {
+            candidate = true;
+        }
+        if (candidate) {
+            const uint64_t where = hashValue & MASK;
+            hashes[where] = std::min(hashes[where], hashValue);
+        }
     }
 }
 
 template<>
 inline void processInput<8, NONE_HASH_ID>(std::string &input, std::array<uint64_t, M> &hashes)
 {
-    const size_t guard = input.size() - 4 + 1;
+    const size_t guard = input.size() - 8 + 1;
     for ( size_t i = 0; i<guard; ++i) {
         const uint64_t hashValue = *((uint64_t*) (input.data() + i));
         uint64_t where = hashValue & MASK;
@@ -93,7 +101,7 @@ inline void processInput<8, NONE_HASH_ID>(std::string &input, std::array<uint64_
 template<>
 inline void processInputInBlocks<8, NONE_HASH_ID>(std::string &input, std::array<uint64_t, M> &hashes)
 {
-    const size_t guard = input.size() - 4 + 1;
+    const size_t guard = input.size() - 8 + 1;
     for ( size_t i = 0; i<guard; ++i) {
         const uint64_t hashValue = *((uint64_t*) (input.data() + i));
         uint64_t where = hashValue & MASK;
@@ -131,6 +139,50 @@ std::array<uint64_t, M> get_sketch( std::string input, const uint8_t kmerlen, co
     std::cerr << "unsupported hash type id: " << hash_id << std::endl;
     exit(EXIT_FAILURE);
 }
+
+template <size_t K, int HASH_ID>
+inline void processInputBest(std::string &input, std::array<uint64_t, M> &hashes) {
+    const size_t guard = input.size() - K + 1;
+    int MULTI_K = 8;
+    const size_t multi_guard = (guard / MULTI_K) * MULTI_K;
+    size_t i = 0;
+    for (; i < multi_guard; i += MULTI_K) {
+        bool candidates = false;
+        int j = 0;
+        for (; j < MULTI_K; j++) {
+            if ((hash<K, HASH_ID>( input.data() + i + j ) & 0xFFC0000000000000) == 0) {
+                candidates = true;
+                break;
+            }
+        }
+        if (candidates)
+            for (; j < MULTI_K; j++) {
+                const uint64_t hashValue = hash<K, HASH_ID>( input.data() + i + j );
+                uint64_t where = hashValue & MASK;
+                if (hashValue < hashes[where]) [[unlikely]]
+                   hashes[where] = hashValue;
+            }
+    }
+    for (; i < guard; ++i) {
+        const uint64_t hashValue = hash<K, HASH_ID>( input.data() + i);
+        uint64_t where = hashValue & MASK;
+        if (hashValue < hashes[where]) [[unlikely]]
+           hashes[where] = hashValue;
+    }
+}
+
+template <size_t K, int HASH_ID>
+inline std::array<uint64_t, M> get_sketch_best( std::string input )
+{
+    std::array<uint64_t, M> hashes{};
+    hashes.fill(std::numeric_limits<uint64_t>::max());
+    processInputBest<K, HASH_ID>(input, hashes);
+    reverseComplementInPlace(input);
+    processInputBest<K, HASH_ID>(input, hashes);
+    return hashes;
+}
+
+template std::array<uint64_t, M> get_sketch_best<20, MA_RUSH_PRIME1_HASH_SIMPLIFIED_ID>( std::string );
 
 template std::array<uint64_t, M> get_sketch_hash_template<MA_RUSH_PRIME1_HASH_SIMPLIFIED_ID>( std::string , uint8_t );
 template std::array<uint64_t, M> get_sketch_hash_template<XXHASH64_ID>( std::string , uint8_t );

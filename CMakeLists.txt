@@ -14,20 +14,24 @@ add_library(minhash_lib ${src})
 target_include_directories(minhash_lib PUBLIC ${PROJECT_SOURCE_DIR}/include)
 set_target_properties(minhash_lib PROPERTIES OUTPUT_NAME "minhash")
 
-add_executable(minhash_executable
-        ${src}
-)
-target_include_directories(minhash_executable PUBLIC ${PROJECT_SOURCE_DIR}/include)
+add_executable(fmhd ${src})
+target_include_directories(fmhd PUBLIC ${PROJECT_SOURCE_DIR}/include)
+
+add_executable(fmhd-dev ${src})
+target_include_directories(fmhd-dev PUBLIC ${PROJECT_SOURCE_DIR}/include)
+target_compile_definitions(fmhd-dev PUBLIC "-DDEVELOPER_BUILD")
 
 if (CYGWIN OR MINGW)
-    target_link_libraries(minhash_executable pthread)
-    target_link_libraries(minhash_executable -static-libgcc)
-    target_link_libraries(minhash_executable -static-libstdc++)
+    target_link_libraries(fmhd pthread)
+    target_link_libraries(fmhd -static-libgcc)
+    target_link_libraries(fmhd -static-libstdc++)
+    target_link_libraries(fmhd-dev pthread)
+    target_link_libraries(fmhd-dev -static-libgcc)
+    target_link_libraries(fmhd-dev -static-libstdc++)
 else()
     find_package(OpenMP)
     if(OpenMP_CXX_FOUND)
-        target_link_libraries(minhash_executable
-                PUBLIC OpenMP::OpenMP_CXX
-        )
+        target_link_libraries(fmhd PUBLIC OpenMP::OpenMP_CXX )
+        target_link_libraries(fmhd-dev PUBLIC OpenMP::OpenMP_CXX )
     endif()
 endif()

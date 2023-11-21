@@ -24,4 +24,7 @@ std::array<uint64_t, M> get_sketch_hash_template( std::string input, uint8_t kme
 
 std::array<uint64_t, M> get_sketch( std::string input, const uint8_t kmerlen, const int hash_id );
 
+template <size_t K, int HASH_ID>
+std::array<uint64_t, M> get_sketch_best( std::string input );
+
 #endif

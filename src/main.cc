@@ -67,19 +67,35 @@ int main (int argc, char **argv) {
         }
         *devout << "reading in "
                 << time_millis(start_t) << " msec" << std::endl;
-        start_t = std::chrono::steady_clock::now();
 
         omp_set_num_threads(num_of_threads);
         *devout << "number of threads: " << num_of_threads << std::endl;
         std::vector<std::array<uint64_t, M>> sketches(len_sketches);
-
-        #pragma omp parallel for
+        std::chrono::steady_clock::time_point sketch_t = std::chrono::steady_clock::now();
+#ifdef DEVELOPER_BUILD
+        const int REPEATS = 2;
+        for (int r = 0; r < REPEATS; r++) {
+#pragma omp parallel for
+            for (int i = 0; i < len_sketches; ++i)
+                sketches[i] = std::move(get_sketch_best<20, MA_RUSH_PRIME1_HASH_SIMPLIFIED_ID>(genomes[i]));
+            *devout << "sketching (best variant) done in "
+                    << time_millis(sketch_t) << " msec" << std::endl;
+            sketch_t = std::chrono::steady_clock::now();
+#endif
+#pragma omp parallel for
         for (int i = 0; i < len_sketches; ++i) {
-            sketches[i] = get_sketch_hash_template<MA_RUSH_PRIME1_HASH_SIMPLIFIED_ID>(genomes[i], kmerlen);
+            sketches[i] = std::move(get_sketch_full_template<20, MA_RUSH_PRIME1_HASH_SIMPLIFIED_ID>(genomes[i]));
+            //sketches[i] = get_sketch_hash_template<MA_RUSH_PRIME1_HASH_SIMPLIFIED_ID>(genomes[i], kmerlen);
 //            sketches[i] = get_sketch(genomes[i], (uint8_t) kmerlen, MA_RUSH_PRIME1_HASH_SIMPLIFIED_ID); // slower
 //            sketches[i] = get_sketch_full_template<8, NONE_HASH_ID>(genomes[i]); // only for testing, slower than without templates
         }
 
+        *devout << "sketching done in "
+                    << time_millis(sketch_t) << " msec" << std::endl;
+#ifdef DEVELOPER_BUILD
+            sketch_t = std::chrono::steady_clock::now();
+        }
+#endif
         save_sketches(sketches, files_names, out_file);
     } else {
         omp_set_num_threads(num_of_threads);
@@ -92,7 +108,7 @@ int main (int argc, char **argv) {
     }
 
     *devout << "finished in "
-            << time_millis(start_t) << " msec" << std::endl;
+            << time_millis(start_t) << " msec total time" << std::endl;
 
     return EXIT_SUCCESS;
 }
